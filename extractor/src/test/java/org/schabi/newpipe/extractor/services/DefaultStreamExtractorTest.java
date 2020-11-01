@@ -2,6 +2,7 @@ package org.schabi.newpipe.extractor.services;
 
 import org.junit.Test;
 import org.schabi.newpipe.extractor.MediaFormat;
+import org.schabi.newpipe.extractor.MetaInfo;
 import org.schabi.newpipe.extractor.localization.DateWrapper;
 import org.schabi.newpipe.extractor.stream.AudioStream;
 import org.schabi.newpipe.extractor.stream.Description;
@@ -12,6 +13,8 @@ import org.schabi.newpipe.extractor.stream.StreamType;
 import org.schabi.newpipe.extractor.stream.SubtitlesStream;
 import org.schabi.newpipe.extractor.stream.VideoStream;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Collections;
@@ -68,6 +71,7 @@ public abstract class DefaultStreamExtractorTest extends DefaultExtractorTest<St
     public Locale expectedLanguageInfo() { return null; } // default: no language info available
     public List<String> expectedTags() { return Collections.emptyList(); } // default: no tags
     public String expectedSupportInfo() { return ""; } // default: no support info available
+    public List<MetaInfo> expectedMetadataInfo() throws MalformedURLException {return Collections.emptyList(); } // default: no metadata info available
 
     @Test
     @Override
@@ -381,5 +385,21 @@ public abstract class DefaultStreamExtractorTest extends DefaultExtractorTest<St
     @Override
     public void testSupportInfo() throws Exception {
         assertEquals(expectedSupportInfo(), extractor().getSupportInfo());
+    }
+
+    @Test
+    public void testMetadataInfo() throws Exception {
+        final MetaInfo metaInfo = extractor().getMetaInfo().get(0);
+        final MetaInfo expectedMetaInfo = expectedMetadataInfo().get(0);
+
+        assertEquals(expectedMetaInfo.getText(), metaInfo.getText());
+        assertEquals(expectedMetaInfo.getTitle(), metaInfo.getTitle());
+
+        for (final String urlText : expectedMetaInfo.getUrlTexts()) {
+            assertTrue(metaInfo.getUrlTexts().contains(urlText));
+        }
+        for (final URL url : expectedMetaInfo.getUrls()) {
+            assertTrue(metaInfo.getUrls().contains(url));
+        }
     }
 }

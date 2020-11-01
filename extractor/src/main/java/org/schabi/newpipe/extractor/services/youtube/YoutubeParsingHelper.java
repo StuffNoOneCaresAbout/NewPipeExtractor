@@ -8,6 +8,7 @@ import com.grack.nanojson.JsonWriter;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.schabi.newpipe.extractor.MetaInfo;
 import org.schabi.newpipe.extractor.downloader.Response;
 import org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException;
 import org.schabi.newpipe.extractor.exceptions.ExtractionException;
@@ -17,6 +18,7 @@ import org.schabi.newpipe.extractor.localization.Localization;
 import org.schabi.newpipe.extractor.utils.Parser;
 import org.schabi.newpipe.extractor.utils.Utils;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
@@ -376,6 +378,7 @@ public class YoutubeParsingHelper {
         return youtubeMusicKeys = new String[]{key, clientName, clientVersion};
     }
 
+    @Nullable
     public static String getUrlFromNavigationEndpoint(JsonObject navigationEndpoint) throws ParsingException {
         if (navigationEndpoint.has("urlEndpoint")) {
             String internUrl = navigationEndpoint.getObject("urlEndpoint").getString("url");
@@ -433,6 +436,7 @@ public class YoutubeParsingHelper {
      * @param html       whether to return HTML, by parsing the navigationEndpoint
      * @return text in the JSON object or {@code null}
      */
+    @Nullable
     public static String getTextFromObject(JsonObject textObject, boolean html) throws ParsingException {
         if (isNullOrEmpty(textObject)) return null;
 
@@ -463,6 +467,7 @@ public class YoutubeParsingHelper {
         return text;
     }
 
+    @Nullable
     public static String getTextFromObject(JsonObject textObject) throws ParsingException {
         return getTextFromObject(textObject, false);
     }
@@ -547,5 +552,88 @@ public class YoutubeParsingHelper {
                 throw new ContentNotAvailableException("Got error: \"" + alertText + "\"");
             }
         }
+    }
+
+    public static List<MetaInfo> getMetaInfo(final JsonArray contents) throws ParsingException {
+        final List<MetaInfo> metaInfo = new ArrayList<>();
+        for (Object content : contents) {
+            final JsonObject resultObject = (JsonObject) content;
+            if (resultObject.has("itemSectionRenderer")) {
+                for (Object sectionContentObject : resultObject.getObject("itemSectionRenderer").getArray("contents")) {
+                    final JsonObject sectionContent = (JsonObject) sectionContentObject;
+                    if (sectionContent.has("infoPanelContentRenderer")) {
+                        metaInfo.add(getInfoPanelContent(sectionContent.getObject("infoPanelContentRenderer")));
+                    }
+                    if (sectionContent.has("clarificationRenderer")) {
+                        metaInfo.add(getClarificationRendererContent(sectionContent.getObject("clarificationRenderer")
+                        ));
+                    }
+
+                }
+            }
+        }
+        return metaInfo;
+    }
+
+    private static MetaInfo getInfoPanelContent(final JsonObject infoPanelContentRenderer)
+            throws ParsingException {
+        final MetaInfo metaInfo = new MetaInfo();
+        StringBuilder sb = new StringBuilder();
+        for (final Object paragraph : infoPanelContentRenderer.getArray("paragraphs")) {
+            sb.append(YoutubeParsingHelper.getTextFromObject((JsonObject) paragraph));
+            if (infoPanelContentRenderer.getArray("paragraphs").size() > 1) {
+                sb.append("<br>");
+            }
+        }
+        metaInfo.setText(sb.toString());
+        if (infoPanelContentRenderer.has("sourceEndpoint")) {
+            final String metaInfoLinkUrl = YoutubeParsingHelper.getUrlFromNavigationEndpoint(
+                    infoPanelContentRenderer.getObject("sourceEndpoint"));
+            try {
+                metaInfo.addUrl(new URL(metaInfoLinkUrl));
+            } catch (final MalformedURLException e) {
+                throw new ParsingException("Could not get metadata info URL", e);
+            }
+
+            final String metaInfoLinkText = YoutubeParsingHelper.getTextFromObject(
+                    infoPanelContentRenderer.getObject("inlineSource"));
+            if (isNullOrEmpty(metaInfoLinkText)) {
+                throw new ParsingException("Could not get metadata info link text.");
+            }
+            metaInfo.addUrlText(metaInfoLinkText);
+        }
+
+        return metaInfo;
+    }
+
+    private static MetaInfo getClarificationRendererContent(final JsonObject clarificationRenderer)
+            throws ParsingException {
+        final MetaInfo metaInfo = new MetaInfo();
+        metaInfo.setTitle(YoutubeParsingHelper.getTextFromObject(
+                clarificationRenderer.getObject("contentTitle")));
+        metaInfo.setText(YoutubeParsingHelper.getTextFromObject(
+                clarificationRenderer.getObject("text")));
+        if (clarificationRenderer.has("actionButton")) {
+            final JsonObject actionButton = clarificationRenderer.getObject("actionButton")
+                    .getObject("buttonRenderer");
+            try {
+                metaInfo.addUrl(new URL(YoutubeParsingHelper.getUrlFromNavigationEndpoint(
+                        actionButton.getObject("command"))));
+            } catch (final MalformedURLException e) {
+                throw new ParsingException("Could not get metadata info URL", e);
+            }
+
+            final String metaInfoLinkText = YoutubeParsingHelper.getTextFromObject(
+                    actionButton.getObject("text"));
+            if (isNullOrEmpty(metaInfoLinkText)) {
+                throw new ParsingException("Could not get metadata info link text.");
+            }
+            metaInfo.addUrlText(metaInfoLinkText);
+        }
+
+        if (clarificationRenderer.has("secondaryEndpoint")) {
+            // TODO: implement
+        }
+        return metaInfo;
     }
 }
